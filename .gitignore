@@ -1,4 +1,11 @@
 .venv
+.venv/
 env/
 venv/
 seed_db.py
+__pycache__
+almacen.db
+venv
+.env
+.ruff_cache
+.db*

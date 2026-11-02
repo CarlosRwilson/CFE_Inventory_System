@@ -8,7 +8,7 @@ name = "CFE Distribución Ensenada Inventory System"
 version = "0.1.0"
 authors = [
     { email = "wilsoncarlosraul@gmail.com", name = "Carlos Wilson"}
-    {email = "jose.loya@uabc.edu.mx",name = "Jose David Loya"},
+    {email = "jose.loya@uabc.edu.mx", name = "Jose David Loya"},
 ]
 
 license = "GNU "
@@ -18,11 +18,12 @@ dependencies = [
     "python-dotenv>=1.0, <2.0",
     "Django>=5.2,<5.3",
     "waitress>=3.0,<4.0",
-    "openpyxl>=3.1,<4.0"
+    "openpyxl>=3.1,<4.0",
+    "pydoc>=3.13, <3.14",
 ]
 [dependency-groups]
 dev = [
     "pytest>=8.0",
     "pytest-django>=4.8",
-    "ruff>=0.110"
+    "ruff>=0.110",
 ]
