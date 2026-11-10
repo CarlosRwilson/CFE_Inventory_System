@@ -10,7 +10,7 @@ from fpdf import FPDF
 # CONFIGURACIÓN Y ESTADO DE LA SESIÓN
 # ==========================================
 API_BASE = "http://localhost:8000/api"
-TIMEOUT_SECONDS = 5 * 60  # 5 minutos de inactividad global
+TIMEOUT_SECONDS = 20 * 60  # 5 minutos de inactividad global
 
 st.set_page_config(page_title="Almacén CFE", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 
@@ -158,18 +158,17 @@ if not st.session_state.logged_in:
     st.title("⚡ Almacén CFE")
     st.subheader("Iniciar sesión")
     with st.form("login_form"):
-        usuario = st.text_input("Usuario")
         password = st.text_input("Contraseña", type="password")
         submit = st.form_submit_button("Entrar", type="primary", use_container_width=True)
 
         if submit:
-            if usuario and password:
+            if password:
                 st.session_state.logged_in = True
-                st.session_state.username = usuario
+                st.session_state.username = password
                 st.session_state.last_activity = time.time()
                 st.rerun()
             else:
-                st.error("Por favor, ingrese usuario y contraseña.")
+                st.error("Por favor, ingrese contraseña.")
 else:
     col_user, col_btn = st.columns([2, 1])
     with col_user:

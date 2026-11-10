@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS usuario (
     activo      BOOLEAN NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
     login       DATETIME,   -- NULL until the first session
     log_out     DATETIME,   -- NULL while the session is open
+    password VARCHAR(30),
     FOREIGN KEY (id_empleado) REFERENCES empleado (id_empleado)
 );
 
@@ -114,11 +115,14 @@ CREATE TABLE IF NOT EXISTS catalogo (
     id_color    INTEGER     NOT NULL,
     id_clase    INTEGER     NOT NULL,
     id_marca    INTEGER     NOT NULL,
+    id_almacen INTEGER NOT NULL,
+    codigo_barras VARCHAR(30),
     FOREIGN KEY (id_detalle) REFERENCES detalles_articulos (id_detalle),
     FOREIGN KEY (id_medida) REFERENCES medida(id_medida),
     FOREIGN KEY (id_color) REFERENCES color (id_color),
     FOREIGN KEY (id_clase) REFERENCES clase (id_clase),
-    FOREIGN KEY (id_marca) REFERENCES marca (id_marca)
+    FOREIGN KEY (id_marca) REFERENCES marca (id_marca),
+    FOREIGN KEY (id_almacen) REFERENCES almacen (id_almacen)
 );
 
 CREATE TABLE IF NOT EXISTS inventario (
@@ -166,6 +170,8 @@ CREATE INDEX IF NOT EXISTS idx_catalogo_color      ON catalogo (id_color);
 CREATE INDEX IF NOT EXISTS idx_catalogo_medida      ON catalogo (id_medida);
 CREATE INDEX IF NOT EXISTS idx_catalogo_clase      ON catalogo (id_clase);
 CREATE INDEX IF NOT EXISTS idx_catalogo_marca      ON catalogo (id_marca);
+CREATE INDEX IF NOT EXISTS idx_catalogo_codigo_barras ON catalogo(codigo_barras);
+CREATE INDEX IF NOT EXISTS catalogo_almacen ON catalogo(id_almacen);
 CREATE INDEX IF NOT EXISTS idx_inventario_catalogo   ON inventario (id_catalogo);
 CREATE INDEX IF NOT EXISTS idx_inventario_almacen    ON inventario (id_almacen);
 CREATE INDEX IF NOT EXISTS idx_entradas_inventario   ON entradas (id_inventario);

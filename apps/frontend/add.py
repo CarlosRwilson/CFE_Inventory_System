@@ -3,7 +3,7 @@ import io
 import sqlite3
 import sys
 from pathlib import Path
-
+import time
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from apps.backend.crud import (
-    get_active_users,
+    authenticate_user,
     get_article_details,
     get_movement_report,
     get_stock_report,
@@ -53,30 +53,91 @@ def _report_csv(rows: list[dict[str, object]]) -> str:
     writer.writerows(rows)
     return output.getvalue()
 
+st.set_page_config(
+    page_title="Almacén CFE Distribución Ensenada",
+    page_icon="⚡",
+    layout="centered",
+    initial_sidebar_state="collapsed",
+)
+st.title("Almacén CFE Distribución Ensenada")
 
-st.set_page_config(page_title="Almacén CFE Distribución Ensenada", page_icon="⚡", layout="centered")
-st.title("Gestión de artíczulos e inventario")
+TIMEOUT_SECONDS = 20 * 60
 
-try:
-    active_users = get_active_users()
-except sqlite3.Error as error:
-    st.error(f"No se pudieron cargar los usuarios: {error}")
-    active_users = []
+st.markdown("""
+    <style>
+        #MainMenu {visibility: hidden;}
+        header {visibility: hidden;}
+    </style>
+""", unsafe_allow_html=True)
 
-user_options = {
-    f"{user['rpe']} - {user['nombres']} {user['apellido_paterno'] or ''} "
-    f"{user['apellido_materno'] or ''} (ID {user['id_usuario']})": user["id_usuario"]
-    for user in active_users
-}
-user_id = None
-if user_options:
-    selected_user = st.selectbox("Usuario responsable", list(user_options))
-    user_id = user_options[selected_user]
-else:
-    st.warning("No hay usuarios activos. Las operaciones de inventario no estarán disponibles.")
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "last_activity" not in st.session_state:
+    st.session_state.last_activity = time.time()
 
-tab_buscar, tab_entrega, tab_ingreso, tab_baja, tab_reportes = st.tabs(
-    ["Buscar artículo", "Entrega", "Ingreso", "Baja", "Reportes"]
+if st.session_state.logged_in and "user_id" not in st.session_state:
+    st.session_state.logged_in = False
+
+if st.session_state.logged_in:
+    if time.time() - st.session_state.last_activity > TIMEOUT_SECONDS:
+        st.session_state.logged_in = False
+        st.session_state.pop("user_id", None)
+        st.session_state.pop("user_display", None)
+        st.session_state["session_expired"] = True
+    else:
+        st.session_state.last_activity = time.time()
+
+if st.session_state.pop("session_expired", False):
+    st.warning("Su sesión expiró por inactividad. Inicie sesión de nuevo.")
+
+if not st.session_state.logged_in:
+    st.subheader("Iniciar sesión")
+    with st.form("login_form"):
+        rpe = st.text_input("Usuario (R.P.E.)")
+        password = st.text_input("Contraseña", type="password")
+        submitted = st.form_submit_button(
+            "Entrar", type="primary", use_container_width=True
+        )
+
+    if submitted:
+        if not rpe.strip() or not password:
+            st.error("Ingrese su R.P.E. y contraseña.")
+        else:
+            try:
+                user = authenticate_user(rpe, password)
+            except sqlite3.Error as error:
+                st.error(f"No se pudo validar el usuario: {error}")
+            else:
+                if user is None:
+                    st.error("R.P.E. o contraseña incorrectos, o usuario inactivo.")
+                else:
+                    full_name = " ".join(
+                        part
+                        for part in (
+                            user["nombres"],
+                            user["apellido_paterno"],
+                            user["apellido_materno"],
+                        )
+                        if part
+                    )
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = user["id_usuario"]
+                    st.session_state.user_display = f"{user['rpe']} - {full_name}"
+                    st.session_state.last_activity = time.time()
+                    st.rerun()
+    st.stop()
+
+user_id = int(st.session_state.user_id)
+header_column, logout_column = st.columns([4, 1])
+header_column.write(f"Sesión: **{st.session_state.user_display}**")
+if logout_column.button("Cerrar sesión"):
+    st.session_state.logged_in = False
+    st.session_state.pop("user_id", None)
+    st.session_state.pop("user_display", None)
+    st.rerun()
+
+tab_buscar, tab_entrega, tab_baja, tab_salida, tab_ingreso, tab_reportes = st.tabs(
+    ["Buscar artículo", "Entrega", "Baja", "Salida", "Ingreso", "Reporte"]
 )
 
 with tab_buscar:
@@ -127,9 +188,7 @@ with tab_entrega:
         delivery_submitted = st.form_submit_button("Registrar entrega")
 
     if delivery_submitted:
-        if user_id is None:
-            st.error("Selecciona un usuario responsable.")
-        elif not delivery_barcode.strip() or not recipient_rpe.strip():
+        if not delivery_barcode.strip() or not recipient_rpe.strip():
             st.warning("Ingresa el código de barras y el R.P.E. del empleado.")
         else:
             try:
@@ -153,6 +212,37 @@ with tab_entrega:
             except ValueError as error:
                 st.warning(str(error))
 
+with tab_salida:
+    st.info("Registra una salida general a nombre del usuario con sesión iniciada.")
+    with st.form("form_salida"):
+        exit_barcode = st.text_input("Código de barras del artículo", key="exit_barcode")
+        exit_quantity = st.number_input(
+            "Cantidad a retirar", min_value=1, step=1, key="exit_quantity"
+        )
+        exit_notes = st.text_area("Descripción / notas (opcional)", key="exit_notes")
+        exit_submitted = st.form_submit_button("Registrar salida")
+
+    if exit_submitted:
+        if not exit_barcode.strip():
+            st.warning("Ingresa el código de barras.")
+        else:
+            try:
+                article = get_article_details(exit_barcode.strip())
+                if article is None:
+                    st.warning("No se encontró un artículo con ese código.")
+                else:
+                    register_stock_exit(
+                        int(article["id_catalogo"]),
+                        int(exit_quantity),
+                        user_id,
+                        description=exit_notes.strip() or "Salida general",
+                    )
+                    st.success(f"Salida registrada: {exit_quantity} unidad(es).")
+            except sqlite3.Error as error:
+                st.error(f"No se pudo registrar la salida: {error}")
+            except ValueError as error:
+                st.warning(str(error))
+
 with tab_ingreso:
     st.info("Registra la entrada de material al inventario.")
     with st.form("form_ingreso"):
@@ -164,9 +254,7 @@ with tab_ingreso:
         entry_submitted = st.form_submit_button("Registrar ingreso")
 
     if entry_submitted:
-        if user_id is None:
-            st.error("Selecciona un usuario responsable.")
-        elif not entry_barcode.strip():
+        if not entry_barcode.strip():
             st.warning("Ingresa el código de barras.")
         else:
             try:
@@ -199,9 +287,7 @@ with tab_baja:
         writeoff_submitted = st.form_submit_button("Registrar baja")
 
     if writeoff_submitted:
-        if user_id is None:
-            st.error("Selecciona un usuario responsable.")
-        elif not writeoff_barcode.strip() or not writeoff_reason.strip():
+        if not writeoff_barcode.strip() or not writeoff_reason.strip():
             st.warning("Ingresa el código de barras y el motivo de la baja.")
         else:
             try:

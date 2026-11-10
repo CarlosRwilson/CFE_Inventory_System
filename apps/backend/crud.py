@@ -32,7 +32,7 @@ def get_article_details(barcode: str) -> dict[str, str | int | None] | None:
                         SELECT i.cantidad_unidades
                         FROM inventario AS i
                         WHERE i.id_catalogo = c.id_catalogo
-                            AND i.id_almacen = c.id_almacen
+                              AND i.id_almacen = c.id_almacen
                     ),
                     0
                 ) AS existencia
@@ -70,6 +70,31 @@ def get_active_users() -> list[dict[str, int | str]]:
         return [dict(row) for row in rows]
 
 
+def authenticate_user(
+    rpe: str, password: str
+) -> dict[str, int | str | None] | None:
+    """Return an active account when the employee R.P.E. and password match."""
+    with get_connection(str(DATABASE_PATH)) as connection:
+        row = connection.execute(
+            """
+            SELECT
+                u.id_usuario,
+                e.rpe,
+                e.nombres,
+                e.apellido_paterno,
+                e.apellido_materno
+            FROM usuario AS u
+            JOIN empleado AS e ON e.id_empleado = u.id_empleado
+            WHERE u.activo = 1
+                AND e.rpe = ? COLLATE NOCASE
+                AND u.password = ?
+            LIMIT 1
+            """,
+            (rpe.strip(), password),
+        ).fetchone()
+        return dict(row) if row else None
+
+
 def _validate_quantity(quantity: int) -> None:
     if quantity <= 0:
         raise ValueError("La cantidad debe ser mayor que cero.")
@@ -81,7 +106,9 @@ def register_stock_entry(
     user_id: int,
     description: str | None = None,
 ) -> None:
-    """Increase stock and record the corresponding inventory entry."""
+    
+    """ Increase stock and record the corresponding inventory entry. """
+    
     _validate_quantity(quantity)
     with get_connection(str(DATABASE_PATH)) as connection:
         catalog = connection.execute(
@@ -138,7 +165,7 @@ def register_stock_exit(
     employee_rpe: str | None = None,
     description: str | None = None,
 ) -> None:
-    """Decrease stock and record a delivery or inventory write-off."""
+    """Decrease stock and record a delivery, exit, or inventory write-off."""
     _validate_quantity(quantity)
     with get_connection(str(DATABASE_PATH)) as connection:
         if employee_rpe:
@@ -203,12 +230,13 @@ def register_stock_exit(
             ),
         )
 
-
+#reporte de existencias
 def get_stock_report() -> list[dict[str, object]]:
     """Report query placeholder; implement the inventory query here."""
     raise NotImplementedError("La consulta del reporte de existencias está pendiente.")
 
-
+#reporte movimientos
 def get_movement_report(month: str) -> list[dict[str, object]]:
     """Report query placeholder; implement the movement query here."""
     raise NotImplementedError("La consulta del reporte de movimientos está pendiente.")
+    
